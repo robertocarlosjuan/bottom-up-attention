@@ -42,11 +42,11 @@ def load_image_ids(split_name):
     ''' Load a list of (path,image_id tuples). Modify this to suit your data locations. '''
     split = []
     if split_name == 'coco_test2014':
-      with open('/storage/che011/OSCAR/Oscar/coco_caption/annotations/captions_val2014.json') as f:
+      with open('/data/coco/annotations/image_info_test2014.json') as f:
         data = json.load(f)
         for item in data['images']:
           image_id = int(item['id'])
-          filepath = os.path.join('/storage/che011/ICT/fairseq-image-captioning/ms-coco/images/val2014/', item['file_name'])
+          filepath = os.path.join('/data/test2014/', item['file_name'])
           split.append((filepath,image_id))
     elif split_name == 'coco_test2015':
       with open('/data/coco/annotations/image_info_test2015.json') as f:
@@ -103,6 +103,10 @@ def get_detections_from_im(net, im_file, image_id, conf_thresh=0.2):
         'features': base64.b64encode(pool5[keep_boxes])
     }   
 
+def get_detections_from_yolov5(model, image_id):
+    im = cv2.imread(im_file)
+    
+
 
 def parse_args():
     """
@@ -148,13 +152,14 @@ def generate_tsv(gpu_id, prototxt, weights, image_ids, outfile):
                 found_ids.add(int(item['image_id']))
     missing = wanted_ids - found_ids
     if len(missing) == 0:
-        print(('GPU {:d}: already completed {:d}'.format(gpu_id, len(image_ids))))
+        print('GPU {:d}: already completed {:d}'.format(gpu_id, len(image_ids)))
     else:
-        print(('GPU {:d}: missing {:d}/{:d}'.format(gpu_id, len(missing), len(image_ids))))
+        print('GPU {:d}: missing {:d}/{:d}'.format(gpu_id, len(missing), len(image_ids)))
     if len(missing) > 0:
         caffe.set_mode_gpu()
         caffe.set_device(gpu_id)
-        net = caffe.Net(prototxt, caffe.TEST, weights=weights)
+#        net = caffe.Net(prototxt, caffe.TEST, weights=weights)
+        net = torch.hub.load('ultralytics/yolov5', 'yolov5x', pretrained=True)
         with open(outfile, 'ab') as tsvfile:
             writer = csv.DictWriter(tsvfile, delimiter = '\t', fieldnames = FIELDNAMES)   
             _t = {'misc' : Timer()}
@@ -162,12 +167,13 @@ def generate_tsv(gpu_id, prototxt, weights, image_ids, outfile):
             for im_file,image_id in image_ids:
                 if int(image_id) in missing:
                     _t['misc'].tic()
-                    writer.writerow(get_detections_from_im(net, im_file, image_id))
+#                    writer.writerow(get_detections_from_im(net, im_file, image_id))
+                    writer.writerow(get_detections_from_yolov5(net, im_file, image_id))
                     _t['misc'].toc()
                     if (count % 100) == 0:
-                        print(('GPU {:d}: {:d}/{:d} {:.3f}s (projected finish: {:.2f} hours)' \
+                        print('GPU {:d}: {:d}/{:d} {:.3f}s (projected finish: {:.2f} hours)' \
                               .format(gpu_id, count+1, len(missing), _t['misc'].average_time, 
-                              _t['misc'].average_time*(len(missing)-count)/3600)))
+                              _t['misc'].average_time*(len(missing)-count)/3600))
                     count += 1
 
                     

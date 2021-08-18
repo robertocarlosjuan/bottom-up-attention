@@ -1,8 +1,8 @@
-from models import Image, Object, Attribute, Relationship
-from models import Region, Graph, QA, QAObject, Synset
-import httplib
+from .models import Image, Object, Attribute, Relationship
+from .models import Region, Graph, QA, QAObject, Synset
+import http.client
 import json
-import utils
+from . import utils
 import os, gc
 
 """
@@ -56,14 +56,20 @@ def GetAllQAs(dataDir=None):
 """
 Load a single scene graph from a .json file.
 """
-def GetSceneGraph(image_id, images='data/', imageDataDir='data/by-id/', synsetFile='data/synsets.json'):
+def GetSceneGraph(image_id, images='data/', imageDataDir='data/by-id/', synsetFile='data/synsets.json', dataDir=None, sgjson=None):
   if type(images) is str:
     # Instead of a string, we can pass this dict as the argument `images`
     images = {img.id:img for img in GetAllImageData(images)}
 
-  fname = str(image_id) + '.json'
   image = images[image_id]
-  data = json.load(open(imageDataDir + fname, 'r'))
+  if dataDir:
+    synsetFile = os.path.join(dataDir, os.path.basename(synsetFile))
+    data = [x for x in sgjson if x['image_id']==image_id]
+    assert len(data) == 1
+    data = data[0]
+  else:
+    fname = imageDataDir + str(image_id) + '.json'
+    data = json.load(open(fname, 'r'))
 
   scene_graph = ParseGraphLocal(data, image)
   scene_graph = InitSynsets(scene_graph, synsetFile)
@@ -162,7 +168,7 @@ def ParseGraphLocal(data, image, verbose=False):
       else:
         count_skips[1] += 1
   if verbose:
-    print 'Skipped {} rels, {} attrs total'.format(*count_skips)
+    print('Skipped {} rels, {} attrs total'.format(*count_skips))
   return Graph(image, objects, relationships, attributes)
 
 """
@@ -239,7 +245,7 @@ def AddAttrsToSceneGraphs(dataDir='data/visualgenome/'):
     sg_dict[iid]['attributes'] = attrs
 
   with open(os.path.join(dataDir, 'scene_graphs.json'), 'w') as f:
-    json.dump(sg_dict.values(), f)
+    json.dump(list(sg_dict.values()), f)
   del attr_data, sg_dict
   gc.collect()
 
